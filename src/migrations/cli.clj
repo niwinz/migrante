@@ -7,11 +7,11 @@
 (defn- ordered-migrations
   "Analyze all migrations and return dependency ordered
   vector with migration functions."
-  [migrations]
+  [migration-modules]
   (let [result (atom [])]
-    (doseq [[nsname migrations-list] (seq migrations)]
+    (doseq [[nsname migrations] (seq migration-modules)]
       (loop [parent nil
-             migs migrations-list]
+             migs migrations]
         (if (seq migs)
           (do
             (let [m1 (filter (fn [x]
@@ -38,26 +38,23 @@
 
 (defn- cli-command-list
   [project]
-  (let [migration-modules (core/get-migration-modules (:migrations project))]
-    (doseq [m (ordered-migrations migration-modules)]
-      (cmdlist-print-migrationstatus m))))
+  (doseq [m (ordered-migrations @core/*migrations*)]
+    (cmdlist-print-migrationstatus m)))
 
 (defn- cli-command-migrate-all
   [project]
-  (let [migration-modules (core/get-migration-modules (:migrations project))]
-    (doseq [m (ordered-migrations migration-modules)]
-      (let [metadata        (meta @m)
-            module-name     (:migration-module metadata)
-            migration-name  (:migration-name metadata)]
-        (when-not (core/applied-migration? module-name migration-name)
-          (apply (:up @m) [core/*db*])
-          (core/apply-migration module-name migration-name)
-          (println (format "Applying migration: %s/%s" module-name migration-name)))))))
+  (doseq [m (ordered-migrations @core/*migrations*)]
+    (let [metadata        (meta @m)
+          module-name     (:migration-module metadata)
+          migration-name  (:migration-name metadata)]
+      (when-not (core/applied-migration? module-name migration-name)
+        (apply (:up @m) [core/*db*])
+        (core/apply-migration module-name migration-name)
+        (println (format "Applying migration: %s/%s" module-name migration-name))))))
 
 (defn- cli-command-rollback
   [project module-name migration-name]
-  (let [migration-modules (core/get-migration-modules (:migrations project))
-        filtered          ((keyword module-name) migration-modules)
+  (let [filtered          ((keyword module-name) @core/*migrations*)
         rollback-pending  (atom [])]
     (loop [ms (reverse filtered)]
       (let [metadata  (meta @(first ms))
@@ -79,12 +76,13 @@
 
 (defn- cli-command-default
   [project command]
-  (println "run-cli:" core/*dbspec*))
+  (println "run-cli"))
 
 (defn run-cli
   [project dbspec command & args]
-  (binding [core/*dbspec* dbspec]
-    (core/bootstrap)
+  (do
+    (core/bootstrap dbspec)
+    (core/load-migration-modules (:migrations project))
     (jdbc/db-transaction [db dbspec]
       (binding [core/*db* db]
         (cond

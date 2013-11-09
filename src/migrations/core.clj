@@ -6,36 +6,31 @@
   (:gen-class))
 
 (def ^:dynamic *migrations* (atom {}))
-(def ^:dynamic *dbspec*)
 (def ^:dynamic *db*)
 
+(defn bootstrap
+  [dbspec]
+  (try
+    (jdbc/db-do-commands dbspec
+      (ddl/create-table :migrations
+        [:module "varchar(255)"]
+        [:name "varchar(255)"]))
+    (catch java.sql.BatchUpdateException e)))
+
 (defn attach-migration
+  "Function used by defmigration macro
+  to register migration."
   [module function]
   (let [mod-data (module @*migrations*)]
-    (println "attach-migration" module function)
+    ;; (println "attach-migration" module function)
     (when (nil? mod-data)
       (swap! *migrations* assoc module []))
     (swap! *migrations* update-in [module] conj function)))
 
-(defn bootstrap
-  []
-  (try
-    (jdbc/db-do-commands *dbspec*
-      (ddl/create-table :migrations
-        [:module "varchar(255)"]
-        [:name "varchar(255)"]))
-    (catch java.sql.BatchUpdateException e
-      (println "Tables exists..."))))
-
-(defn get-migration-modules
-  [opts]
-  (if-let [opts-modules (:modules opts)]
-    (do
-      (doseq [nmod opts-modules]
-        (println "LOADING:" nmod)
-        (load nmod))
-      @*migrations*)
-    {}))
+(defn load-migration-modules
+  [migrations-cfg]
+  (when-let [opts-modules (:modules migrations-cfg)]
+    (doall (map load opts-modules))))
 
 (defmacro defmigration
   [& {:keys [name parent up down]}]
