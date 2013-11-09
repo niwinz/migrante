@@ -1,10 +1,13 @@
 (ns migrations.core
   (:require [clojure.pprint :refer [pprint]])
   (:require [clojure.java.jdbc :as jdbc]
-            [clojure.java.jdbc.ddl :as ddl])
+            [clojure.java.jdbc.ddl :as ddl]
+            [clojure.java.jdbc.sql :as sql])
   (:gen-class))
 
 (def ^:dynamic *migrations* (atom {}))
+(def ^:dynamic *dbspec*)
+(def ^:dynamic *db*)
 
 (defn attach-migration
   [module function]
@@ -15,32 +18,24 @@
     (swap! *migrations* update-in [module] conj function)))
 
 (defn bootstrap
-  [dbspec]
-  (println "Bootstraping...")
+  []
   (try
-    (jdbc/db-do-commands dbspec
+    (jdbc/db-do-commands *dbspec*
       (ddl/create-table :migrations
         [:module "varchar(255)"]
         [:name "varchar(255)"]))
     (catch java.sql.BatchUpdateException e
       (println "Tables exists..."))))
 
-(defn applied-migration?
-  [module name db-spec]
-  (let [rows (jdbc/query db-spec
-               ["SELECT status FROM migrations WHERE module = ? AND name = ?" module name])]
-    (if (= (count rows) 0) false true)))
-
-(defn scan-modules
+(defn get-migration-modules
   [opts]
-  (let [opts-modules  (:modules opts)]
-    (if (nil? opts-modules)
-      []
-      (do
-        (doseq [nmod opts-modules]
-          (println "LOADING:" nmod)
-          (load nmod))
-        @*migrations*))))
+  (if-let [opts-modules (:modules opts)]
+    (do
+      (doseq [nmod opts-modules]
+        (println "LOADING:" nmod)
+        (load nmod))
+      @*migrations*)
+    {}))
 
 (defmacro defmigration
   [& {:keys [name parent up down]}]
@@ -53,11 +48,17 @@
      (let [updater# (ns-resolve 'migrations.core 'attach-migration)]
        (updater# (keyword (.-name *ns*)) (var ~(symbol (format "migration-%s" name)))))))
 
-;; (defmigration "foo-1" nil
-;;   (up [dbspec]
-;;     (jdbc/db-do-commands dbspec
-;;       (jdbc/create-table :foo
-;;         [:name "varchar(10)"])))
-;;   (down [dbspec]
-;;     (jdbc/db-do-commands dbspec
-;;       (ddl/drop-table :foo))))
+(defn applied-migration?
+  [module name]
+  (let [rows (jdbc/query *db*
+               ["SELECT module, name FROM migrations WHERE module = ? AND name = ?" module name])]
+    (if (= (count rows) 0) false true)))
+
+(defn apply-migration
+  [module name]
+  (jdbc/insert! *db* :migrations
+             {:module module :name name}))
+
+(defn rollback-migration
+  [module name]
+  (jdbc/delete! *db* :migrations (sql/where {:name name :module module})))

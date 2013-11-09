@@ -25,4 +25,4 @@ rollback n       Rollback last n migrations (n defaults to 1)"
          opts (:migrations project)]
      (when (nil? opts)
        (throw+ "migrations config is missing:"))
-     (migrations-cli/run-cli project spec command))))
+     (apply migrations-cli/run-cli (concat [project spec command] args)))))
