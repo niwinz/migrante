@@ -17,20 +17,19 @@
         [:name "varchar(255)"]))
     (catch java.sql.BatchUpdateException e)))
 
+(defn load-migration-modules
+  [migrations-cfg]
+  (when-let [opts-modules (:modules migrations-cfg)]
+    (doall (map load opts-modules))))
+
 (defn attach-migration
   "Function used by defmigration macro
   to register migration."
   [module function]
   (let [mod-data (module @*migrations*)]
-    ;; (println "attach-migration" module function)
     (when (nil? mod-data)
       (swap! *migrations* assoc module []))
     (swap! *migrations* update-in [module] conj function)))
-
-(defn load-migration-modules
-  [migrations-cfg]
-  (when-let [opts-modules (:modules migrations-cfg)]
-    (doall (map load opts-modules))))
 
 (defmacro defmigration
   [& {:keys [name parent up down]}]

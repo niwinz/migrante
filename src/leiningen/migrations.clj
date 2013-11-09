@@ -12,14 +12,7 @@
     spec))
 
 (defn migrations
-  "Simply manage sql migrations with clojure/jdbc
-
-Commands:
-create name      Create migration (eg: migrations/20130712101745082-<name>.clj)
-migrate          Run all pending migrations
-rollback n       Rollback last n migrations (n defaults to 1)"
-
-  ([project] (println (:doc (meta #'migrations))))
+  ([project] (migrations-cli/cli-command-help project))
   ([project command & args]
    (let [spec (get-dbspec)
          opts (:migrations project)]

@@ -74,9 +74,20 @@
           (core/rollback-migration module-name migration-name)
           (println (format "Rollback migration: %s/%s" module-name migration-name)))))))
 
+(defn cli-command-help
+  "Simply manage sql migrations with clojure/jdbc
+
+Commands:
+  list                                  List all migrations and their status.
+  migrate-all                           Run all pending migrations.
+  rollback [modulename] [migration]     Rollback to specified migration including it.
+  help                                  Show this help."
+  [project & args]
+  (println (:doc (meta #'cli-command-help))))
+
 (defn- cli-command-default
   [project command]
-  (println "run-cli"))
+  (cli-command-help project))
 
 (defn run-cli
   [project dbspec command & args]
@@ -89,4 +100,5 @@
           (= command "list") (cli-command-list project)
           (= command "migrate-all") (cli-command-migrate-all project)
           (= command "rollback") (apply cli-command-rollback (cons project (vec args)))
+          (= command "help") (cli-command-help project)
           :else (cli-command-default project command))))))
