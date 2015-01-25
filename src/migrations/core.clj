@@ -1,76 +1,65 @@
 (ns migrations.core
   (:require [clojure.pprint :refer (pprint)]
             [slingshot.slingshot :refer [throw+ try+]]
-            [suricatta.core :as sc])
-  (:import org.mapdb.DBMaker))
+            [suricatta.core :as sc]))
 
-;; (def ^:dynamic *migrations* (atom {}))
-;; (def ^:dynamic *db*)
+(def ^:dynamic *localdb* nil)
+(def ^:dynamic *verbose* false)
 
-;; (defn bootstrap
-;;   [dbspec]
-;;   (try
-;;     (jdbc/db-do-commands dbspec
-;;       (ddl/create-table :migrations
-;;         [:module "varchar(255)"]
-;;         [:name "varchar(255)"]))
-;;     (catch java.sql.BatchUpdateException e)))
+(def ^:private
+  sql (str "create table if not exists migrations ("
+           " name varchar(255),"
+           " created_at datetime,"
+           " migration varchar(255),"
+           " unique(name, migration)"
+           ");"))
 
-;; (defn load-migration-modules
-;;   [migrations-cfg]
-;;   (when-let [opts-modules (:modules migrations-cfg)]
-;;     (doall (map load opts-modules))))
+(defn- localdb
+  "Get a suricatta opened context to the local state database."
+  [{:keys [localdb] :or {localdb "_migrations.h2"}}]
+  (let [dbspec {:subprotocol "h2" :subname localdb}]
+    (sc/context dbspec)))
 
-;; (defn attach-migration
-;;   "Function used by defmigration macro
-;;   to register migration."
-;;   [module function]
-;;   (let [mod-data (module @*migrations*)]
-;;     (when (nil? mod-data)
-;;       (swap! *migrations* assoc module []))
-;;     (swap! *migrations* update-in [module] conj function)))
+(defn- migration-registred?
+  "Check if concrete migration is already registred."
+  [modname name]
+  (let [sql (str "select name, migration from migrations"
+                 " where name=? and migration=?")
+        res (sc/fetch *localdb* [sql modname name])]
+    (pos? (count res))))
 
-;; (defmacro defmigration
-;;   [& {:keys [name parent up down]}]
-;;   `(do
-;;      (def ~(symbol (format "migration-%s" name))
-;;        (with-meta {:up ~up :down ~down}
-;;                   {:migration-name ~name
-;;                    :migration-parent ~parent
-;;                    :migration-module (str (.-name *ns*))}))
-;;      (let [updater# (ns-resolve 'migrations.core 'attach-migration)]
-;;        (updater# (keyword (.-name *ns*)) (var ~(symbol (format "migration-%s" name)))))))
+(defn- register-migration!
+  "Register a concrete migration into local migrations database."
+  [modname name]
+  (let [sql "insert into migrations (name, migration) values (?, ?)"]
+    (sc/execute *localdb* [sql modname name])))
 
-;; (defn applied-migration?
-;;   [module name]
-;;   (let [rows (jdbc/query *db*
-;;                ["SELECT module, name FROM migrations WHERE module = ? AND name = ?" module name])]
-;;     (if (= (count rows) 0) false true)))
+(defn- unregister-migration!
+  "Unregister a concrete migration from local migrations database."
+  [modname name]
+  (let [sql "delete from migrations where name=? and migration=?;"]
+    (sc/execute *localdb* [sql modname name])))
 
-;; (defn apply-migration
-;;   [module name]
-;;   (jdbc/insert! *db* :migrations
-;;              {:module module :name name}))
+(defn- bootstrap-if-needed
+  "Bootstrap the initial database for store migrations."
+  [options]
+  (with-open [ctx (localdb options)]
+    (sc/execute ctx sql)))
 
-;; (defn rollback-migration
-;;   [module name]
-;;   (jdbc/delete! *db* :migrations (sql/where {:name name :module module})))
-
-
-(defn get-localdb
-  "Get an instance of local db."
-  []
-  (let [file (java.io.File. "./migrations.db")
-        db (doto (DBMaker/newFileDB file)
-             (.closeOnJvmShutdown))]
-    (.make db)))
-
+(defn- do-migrate
+  [ctx {:keys [name steps]} {:keys [fake until] :or [fake false]}]
+  (sc/atomic ctx
+    (doseq [step steps]
+      (let [upfn (:up step)]
+        (sc/atomic ctx (upfn ctx))))))
 
 (defn migrate
   "Main entry point for apply migrations."
   ([dbspec migration] (migration dbspec migration {}))
-  ([dbspec migration {:keys [verbose until fake]
-                      :or {verbose true fake false}}]
-   (with-open [ctx (sc/context dbspec)]
-     (let [name (keyword (:name migration))]
-       (bootstrap-if-neeed ctx name)
+  ([dbspec migration {:keys [verbose] :or {verbose true} :as options}]
+   (bootstrap-if-neeed options)
+   (binding [*localdb* (localdb options)
+             *verbose* verbose]
+     (with-open [ctx (sc/context dbspec)]
+       (do-migrate ctx migration options)))))
+
