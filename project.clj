@@ -1,4 +1,4 @@
-(defproject be.niwi/migrations "0.1.0"
+(defproject be.niwi/migrations "0.1.0-SNAPSHOT"
   :description "FIXME: write description"
   :url "http://example.com/FIXME"
   :license {:name "BSD (2-Clause)"
