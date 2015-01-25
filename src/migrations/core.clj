@@ -1,9 +1,6 @@
 (ns migrations.core
-  (:require [clojure.pprint :refer [pprint]])
-  (:require [clojure.java.jdbc :as jdbc]
-            [clojure.java.jdbc.ddl :as ddl]
-            [clojure.java.jdbc.sql :as sql])
-  (:gen-class))
+  (:require [clojure.pprint :refer (pprint)]
+            [suricatta.core :as sc]))
 
 (def ^:dynamic *migrations* (atom {}))
 (def ^:dynamic *db*)
