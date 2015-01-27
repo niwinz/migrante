@@ -47,11 +47,16 @@
     (sc/execute ctx sql)))
 
 (defn- do-migrate
-  [ctx {:keys [name steps]} {:keys [fake until] :or [fake false]}]
+  [ctx {:keys [name steps]} {:keys [until]}]
   (sc/atomic ctx
-    (doseq [step steps]
-      (let [upfn (:up step)]
-        (sc/atomic ctx (upfn ctx))))))
+    (reduce (fn [_ [stepname step]]
+              (timbre/info (format "- Applying migration [%s] %s." name stepname))
+              (let [upfn (:up step)]
+                (sc/atomic ctx
+                  (upfn ctx))))
+            nil
+            steps)))
+
 
 (defn migrate
   "Main entry point for apply migrations."
