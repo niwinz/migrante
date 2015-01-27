@@ -12,6 +12,11 @@
 (def ^:dynamic *localdb* nil)
 (def ^:dynamic *verbose* false)
 
+(defmacro log
+  [& args]
+  `(when *verbose*
+     (timbre/info ~@args)))
+
 (def ^:private
   sql (str "create table if not exists migrations ("
            " module varchar(255),"
@@ -83,7 +88,7 @@
     (sc/atomic ctx
       (reduce (fn [_ [stepid stepdata]]
                 (when-not (migration-registred? migrationsid stepid)
-                  (timbre/info (format "- Applying migration %s/%s." migrationsid stepid))
+                  (log (format "- Applying migration %s/%s." migrationsid stepid))
                   (sc/atomic ctx
                     (run-up stepdata ctx)
                     (register-migration! migrationsid stepid)))
