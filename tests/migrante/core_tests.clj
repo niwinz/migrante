@@ -87,3 +87,46 @@
                             [:0002 step]]}]
     (mg/migrate *ctx* migrations)
     (is (= @result 2))))
+
+
+(deftest migrations-with-exceptions
+  (let [result (atom 0)
+        step (fn [n]
+               (fn [ctx]
+                 (swap! result inc)
+                 (sc/execute ctx ["insert into foo (id) values (?)" n])))
+        migrations {:name :foobar
+                    :steps [[:0001 (step 1)]
+                            [:0002 (step 2)]
+                            [:0003 (fn [_] (throw (Exception. "test")))]]}]
+
+    (mg/execute *ctx* "create table foo (id integer);")
+    (is (thrown? Exception (mg/migrate *ctx* migrations)))
+
+    ;; Test if first two migrations are executed correctly.
+    (is (= @result 2))
+
+    ;; Test if all database changes are rollback.
+    (let [res (mg/fetch *ctx* "select * from foo;")]
+      (is (= 0 (count res))))))
+
+(deftest migrations-with-until-limitation
+  (let [result (atom 0)
+        step (fn [n]
+               (fn [ctx]
+                 (swap! result inc)
+                 (sc/execute ctx ["insert into foo (id) values (?)" n])))
+        migrations {:name :foobar
+                    :steps [[:0001 (step 1)]
+                            [:0002 (step 2)]
+                            [:0003 (fn [_] (throw (Exception. "test")))]]}]
+
+    (mg/execute *ctx* "create table foo (id integer);")
+    (mg/migrate *ctx* migrations {:until :0002})
+
+    ;; Test if first two migrations are executed correctly.
+    (is (= @result 2))
+
+    ;; Test if all database changes are rollback.
+    (let [res (mg/fetch *ctx* "select * from foo;")]
+      (is (= 2 (count res))))))
