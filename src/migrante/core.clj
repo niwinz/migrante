@@ -14,10 +14,10 @@
 
 (def ^:private
   sql (str "create table if not exists migrations ("
-           " name varchar(255),"
-           " created_at datetime,"
-           " migration varchar(255),"
-           " unique(name, migration)"
+           " module varchar(255),"
+           " step varchar(255),"
+           " created_at timestamp,"
+           " unique(module, step)"
            ");"))
 
 (defn- localdb
@@ -28,23 +28,26 @@
 
 (defn- migration-registred?
   "Check if concrete migration is already registred."
-  [modname name]
-  (let [sql (str "select name, migration from migrations"
-                 " where name=? and migration=?")
-        res (sc/fetch *localdb* [sql modname name])]
+  [module step]
+  {:pre [(string? module) (string? step)]}
+  (let [sql (str "select * from migrations"
+                 " where module=? and step=?")
+        res (sc/fetch *localdb* [sql module step])]
     (pos? (count res))))
 
 (defn- register-migration!
   "Register a concrete migration into local migrations database."
-  [modname name]
-  (let [sql "insert into migrations (name, migration) values (?, ?)"]
-    (sc/execute *localdb* [sql modname name])))
+  [module step]
+  {:pre [(string? module) (string? step)]}
+  (let [sql "insert into migrations (module, step) values (?, ?)"]
+    (sc/execute *localdb* [sql module step])))
 
 (defn- unregister-migration!
   "Unregister a concrete migration from local migrations database."
-  [modname name]
-  (let [sql "delete from migrations where name=? and migration=?;"]
-    (sc/execute *localdb* [sql modname name])))
+  [module step]
+  {:pre [(string? module) (string? step)]}
+  (let [sql "delete from migrations where module=? and step=?;"]
+    (sc/execute *localdb* [sql module step])))
 
 (defn- bootstrap-if-needed
   "Bootstrap the initial database for store migrations."
