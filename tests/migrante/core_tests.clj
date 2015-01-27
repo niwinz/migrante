@@ -1,4 +1,4 @@
-(ns suricatta.core-test
+(ns migrante.core-tests
   (:require [clojure.test :refer :all]
             [migrations.core :as mg]))
 

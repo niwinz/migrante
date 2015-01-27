@@ -1,4 +1,4 @@
-(ns migrations.core
+(ns migrante.core
   (:require [clojure.pprint :refer (pprint)]
             [slingshot.slingshot :refer [throw+ try+]]
             [suricatta.core :as sc]))
@@ -62,4 +62,3 @@
              *verbose* verbose]
      (with-open [ctx (sc/context dbspec)]
        (do-migrate ctx migration options)))))
-
