@@ -81,7 +81,7 @@
     nil))
 
 (defn- do-migrate
-  [ctx migrations {:keys [until]}]
+  [ctx migrations {:keys [until fake] :or {fake false}}]
   (let [migrationsid (:name migrations)
         migrationsname (name migrationsid)
         steps (:steps migrations)]
@@ -90,7 +90,8 @@
                 (when-not (migration-registred? migrationsid stepid)
                   (log (format "- Applying migration %s/%s." migrationsid stepid))
                   (sc/atomic ctx
-                    (run-up stepdata ctx)
+                    (when (not fake)
+                      (run-up stepdata ctx))
                     (register-migration! migrationsid stepid)))
                 (when (= until stepid)
                   (reduced nil)))
@@ -122,7 +123,7 @@
 (defn migrate
   "Main entry point for apply migrations."
   ([dbspec migration] (migrate dbspec migration {}))
-  ([dbspec migration {:keys [verbose fake] :or {verbose true fake false} :as options}]
+  ([dbspec migration {:keys [verbose fake] :or {verbose true} :as options}]
    (bootstrap-if-needed options)
    (let [context (if (satisfies? scproto/IContext dbspec)
                    dbspec
