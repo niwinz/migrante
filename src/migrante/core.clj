@@ -130,8 +130,9 @@
                    dbspec
                    (sc/context dbspec))]
      (with-open [ctx context
-                 ldb (localdb options)]
-       (binding [*localdb* ldb
-                 *verbose* verbose
-                 *fake* fake]
-         (do-migrate ctx migration options))))))
+                 lctx (localdb options)]
+       (sc/atomic-apply lctx (fn [lctx]
+                               (binding [*localdb* lctx
+                                         *verbose* verbose
+                                         *fake* fake]
+                                 (do-migrate ctx migration options))))))))
