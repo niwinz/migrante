@@ -2,7 +2,8 @@
   (:require [clojure.pprint :refer (pprint)]
             [taoensso.timbre :as timbre]
             [slingshot.slingshot :refer [throw+ try+]]
-            [suricatta.core :as sc]))
+            [suricatta.core :as sc]
+            [suricatta.proto :as scproto]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Private Api
@@ -125,8 +126,12 @@
   ([dbspec migration] (migrate dbspec migration {}))
   ([dbspec migration {:keys [verbose fake] :or {verbose true fake false} :as options}]
    (bootstrap-if-needed options)
-   (binding [*localdb* (localdb options)
-             *verbose* verbose
-             *fake* fake]
-     (with-open [ctx (sc/context dbspec)]
-       (do-migrate ctx migration options)))))
+   (let [context (if (satisfies? scproto/IContext dbspec)
+                   dbspec
+                   (sc/context dbspec))]
+     (with-open [ctx context
+                 ldb (localdb options)]
+       (binding [*localdb* ldb
+                 *verbose* verbose
+                 *fake* fake]
+         (do-migrate ctx migration options))))))
