@@ -29,25 +29,25 @@
 (defn- migration-registred?
   "Check if concrete migration is already registred."
   [module step]
-  {:pre [(string? module) (string? step)]}
+  {:pre [(keyword? module) (keyword? step)]}
   (let [sql (str "select * from migrations"
                  " where module=? and step=?")
-        res (sc/fetch *localdb* [sql module step])]
+        res (sc/fetch *localdb* [sql (name module) (name step)])]
     (pos? (count res))))
 
 (defn- register-migration!
   "Register a concrete migration into local migrations database."
   [module step]
-  {:pre [(string? module) (string? step)]}
+  {:pre [(keyword? module) (keyword? step)]}
   (let [sql "insert into migrations (module, step) values (?, ?)"]
-    (sc/execute *localdb* [sql module step])))
+    (sc/execute *localdb* [sql (name module) (name step)])))
 
 (defn- unregister-migration!
   "Unregister a concrete migration from local migrations database."
   [module step]
-  {:pre [(string? module) (string? step)]}
+  {:pre [(keyword? module) (keyword? step)]}
   (let [sql "delete from migrations where module=? and step=?;"]
-    (sc/execute *localdb* [sql module step])))
+    (sc/execute *localdb* [sql (name module) (name step)])))
 
 (defn- bootstrap-if-needed
   "Bootstrap the initial database for store migrations."
