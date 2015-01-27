@@ -76,17 +76,19 @@
     nil))
 
 (defn- do-migrate
-  [ctx migration {:keys [until]}]
-  (let [modname (name (:name migration))
-        steps (:steps migration)]
+  [ctx migrations {:keys [until]}]
+  (let [migrationsid (:name migrations)
+        migrationsname (name migrationsid)
+        steps (:steps migrations)]
     (sc/atomic ctx
-      (reduce (fn [_ [stepname step]]
-                (let [stepname (name stepname)]
-                  (when-not (migration-registred? modname (name stepname))
-                    (timbre/info (format "- Applying migration [%s] %s." name stepname))
-                    (sc/atomic ctx
-                      (run-up step ctx)
-                      (register-migration! modname stepname)))))
+      (reduce (fn [_ [stepid stepdata]]
+                (when-not (migration-registred? migrationsid stepid)
+                  (timbre/info (format "- Applying migration %s/%s." migrationsid stepid))
+                  (sc/atomic ctx
+                    (run-up stepdata ctx)
+                    (register-migration! migrationsid stepid)))
+                (when (= until stepid)
+                  (reduced nil)))
               nil
               steps))))
 
