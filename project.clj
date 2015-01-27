@@ -9,6 +9,7 @@
                  [slingshot "0.12.1"]
                  [suricatta "0.2.0"]
                  [com.h2database/h2 "1.3.176"]]
+  :test-paths ["tests"]
   :profiles {:dev {:dependencies [[postgresql "9.3-1102.jdbc41"]
                                   [com.h2database/h2 "1.3.176"]]
                    :main ^:skip-aot migrations.test}}
