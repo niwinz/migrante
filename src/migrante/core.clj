@@ -11,7 +11,6 @@
 
 (def ^:dynamic *localdb* nil)
 (def ^:dynamic *verbose* false)
-(def ^:dynamic *fake* false)
 
 (def ^:private
   sql (str "create table if not exists migrations ("
@@ -99,11 +98,9 @@
 (defn execute
   "Execute a query and return a number of rows affected."
   ([q]
-   (when (false? *fake*)
-     (sc/execute q)))
+   (sc/execute q))
   ([ctx q]
-   (when (false? *fake*)
-     (sc/execute q ctx))))
+   (sc/execute ctx q)))
 
 (defn fetch
   "Fetch eagerly results executing a query.
@@ -111,15 +108,10 @@
   This function returns a vector of records (default) or
   rows (depending on specified opts). Resources are relased
   inmediatelly without specific explicit action for it."
-  ([q]
-   (when (false? *fake*)
-     (sc/fetch q)))
   ([ctx q]
-   (when (false? *fake*)
-     (sc/fetch q ctx)))
+   (sc/fetch ctx q))
   ([ctx q opts]
-   (when (false? *fake*)
-     (sc/fetch q ctx opts))))
+   (sc/fetch ctx q opts)))
 
 (defn migrate
   "Main entry point for apply migrations."
@@ -133,6 +125,5 @@
                  lctx (localdb options)]
        (sc/atomic-apply lctx (fn [lctx]
                                (binding [*localdb* lctx
-                                         *verbose* verbose
-                                         *fake* fake]
+                                         *verbose* verbose]
                                  (do-migrate ctx migration options))))))))
