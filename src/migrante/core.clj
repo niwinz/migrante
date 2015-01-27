@@ -55,16 +55,41 @@
   (with-open [ctx (localdb options)]
     (sc/execute ctx sql)))
 
+
+(defprotocol IMigration
+  (run-up [_ _] "Run function in migrate process.")
+  (run-down [_ _] "Run function in rollback process."))
+
+(extend-protocol IMigration
+  clojure.lang.IPersistentMap
+  (run-up [step ctx]
+    (let [upfn (:up step)]
+      (upfn ctx)))
+
+  (run-down [step ctx]
+    (let [downfn (:down step)]
+      (downfn ctx)))
+
+  clojure.lang.IFn
+  (run-up [step ctx]
+    (step ctx))
+  (run-down [step ctx]
+    nil))
+
 (defn- do-migrate
-  [ctx {:keys [name steps]} {:keys [until]}]
-  (sc/atomic ctx
-    (reduce (fn [_ [stepname step]]
-              (timbre/info (format "- Applying migration [%s] %s." name stepname))
-              (let [upfn (:up step)]
-                (sc/atomic ctx
-                  (upfn ctx))))
-            nil
-            steps)))
+  [ctx migration {:keys [until]}]
+  (let [modname (name (:name migration))
+        steps (:steps migration)]
+    (sc/atomic ctx
+      (reduce (fn [_ [stepname step]]
+                (let [stepname (name stepname)]
+                  (when-not (migration-registred? modname (name stepname))
+                    (timbre/info (format "- Applying migration [%s] %s." name stepname))
+                    (sc/atomic ctx
+                      (run-up step ctx)
+                      (register-migration! modname stepname)))))
+              nil
+              steps))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Public Api
