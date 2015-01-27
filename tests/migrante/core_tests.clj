@@ -1,7 +1,8 @@
 (ns migrante.core-tests
   (:require [clojure.test :refer :all]
             [migrante.core :as mg]
-            [suricatta.core :as sc]))
+            [suricatta.core :as sc]
+            [suricatta.proto :as scproto]))
 
 (def ^{:dynamic true
        :private true}
@@ -10,52 +11,79 @@
 (def ^:private dbspec {:subprotocol "postgresql"
                        :subname "//127.0.0.1/test"})
 
+;; Declaration of migration steps
+
+;; (def migration-0001
+;;   {:up (fn [ctx]
+;;          (println " (applying migration 0001)"))
+;;    :down (fn [ctx]
+;;            (println " (unapplying migration 0001)"))})
+
+;; (def migration-0002
+;;   {:up (fn [ctx]
+;;          (println " (applying migration 0002)"))
+;;    :down (fn [ctx]
+;;            (println " (unapplying migration 0002)"))})
+
+;; (def migration-0003
+;;   {:up (fn [ctx]
+;;          (println " (applying migration 0003)"))
+;;    :down (fn [ctx]
+;;            (println " (unapplying migration 0003)"))})
+
+;; Declaration of migration
+;; (def migrations
+;;   {:name :testapp
+;;    :steps [[:0001 migration-0001]
+;;            [:0002 migration-0002]
+;;            [:0003 migration-0003]]})
+
+(defn- wrap-ctx
+  "Function that wraps context in something
+  that test can control."
+  ([ctx] (wrap-ctx ctx false))
+  ([ctx allowclose]
+   (reify
+     scproto/IContext
+     (get-context [_] (scproto/get-context ctx))
+     (get-configuration [_] (scproto/get-configuration ctx))
+
+     java.io.Closeable
+     (close [_]
+       (when allowclose
+         (.close ctx))))))
+
 (defn- database-fixture
   [end]
   (with-open [ctx (sc/context dbspec)]
     (sc/atomic ctx
-      (binding [*ctx* ctx]
-        (end)
-        (sc/set-rollback! ctx)))))
+      (let [ctx (wrap-ctx ctx)]
+        (with-redefs [mg/localdb (fn [_] ctx)]
+          (binding [*ctx* ctx]
+            (end)
+            (sc/set-rollback! *ctx*)))))))
 
 (use-fixtures :each database-fixture)
 
-;; Declaration of migration steps
+(deftest migrations-run-twice-and-preserve
+  (let [result (atom 0)
+        step {:up (fn [_] (swap! result inc))}
+        migrations {:name :foobar
+                    :steps [[:0001 step]
+                            [:0002 step]
+                            [:0003 step]
+                            [:0004 step]]}]
+    (mg/migrate *ctx* migrations)
+    (is (= @result 4))
 
-(def migration-0001
-  {:up (fn [ctx]
-         (println " (applying migration 0001)"))
-   :down (fn [ctx]
-           (println " (unapplying migration 0001)"))})
+    (mg/migrate *ctx* migrations)
+    (is (= @result 4))))
 
-(def migration-0002
-  {:up (fn [ctx]
-         (println " (applying migration 0002)"))
-   :down (fn [ctx]
-           (println " (unapplying migration 0002)"))})
-
-(def migration-0003
-  {:up (fn [ctx]
-         (println " (applying migration 0003)"))
-   :down (fn [ctx]
-           (println " (unapplying migration 0003)"))})
-
-;; Declaration of migration
-
-(def migrations
-  {:name "testapp"
-   :steps [[:0001 migration-0001]
-           [:0002 migration-0002]
-           [:0003 migration-0003]]})
-
-;; Usage example
-
-
-(deftest simple-migrations
-  (mg/migrate dbspec migrations))
-
-;; (mg/migrate dbspec migrations {:verbose true})
-
-;; (mg/migrate dbspec migrations {:verbose true
-;;                                :until :migration-0002
-;;                                :fake true})
+(deftest migrations-with-step-as-fn
+  (let [result (atom 0)
+        step (fn [_] (swap! result inc))
+        migrations {:name :foobar
+                    :steps [[:0001 step]
+                            [:0002 step]]}]
+    (mg/migrate *ctx* migrations)
+    (is (= @result 2))))
