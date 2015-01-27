@@ -127,6 +127,28 @@
     ;; Test if first two migrations are executed correctly.
     (is (= @result 2))
 
-    ;; Test if all database changes are rollback.
+    ;; Test if only two migrations are correctly
+    ;; persisted in a database.
     (let [res (mg/fetch *ctx* "select * from foo;")]
       (is (= 2 (count res))))))
+
+(deftest migrations-with-fake-parameter
+  (let [result (atom 0)
+        step (fn [n]
+               (fn [ctx]
+                 (swap! result inc)
+                 (sc/execute ctx ["insert into foo (id) values (?)" n])))
+        migrations {:name :foobar
+                    :steps [[:0001 (step 1)]
+                            [:0002 (step 2)]
+                            [:0003 (fn [_] (throw (Exception. "test")))]]}]
+
+    (mg/execute *ctx* "create table foo (id integer);")
+    (mg/migrate *ctx* migrations {:fake true})
+
+    ;; Test if first two migrations are executed correctly.
+    (is (= @result 0))
+
+    ;; This now should not raise exception because all
+    ;; migration are faked and registred.
+    (mg/migrate *ctx* migrations)))
