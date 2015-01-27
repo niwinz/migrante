@@ -55,7 +55,6 @@
   (with-open [ctx (localdb options)]
     (sc/execute ctx sql)))
 
-
 (defprotocol IMigration
   (run-up [_ _] "Run function in migrate process.")
   (run-down [_ _] "Run function in rollback process."))
