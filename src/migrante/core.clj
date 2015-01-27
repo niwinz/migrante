@@ -1,10 +1,16 @@
 (ns migrante.core
   (:require [clojure.pprint :refer (pprint)]
+            [taoensso.timbre :as timbre]
             [slingshot.slingshot :refer [throw+ try+]]
             [suricatta.core :as sc]))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Private Api
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (def ^:dynamic *localdb* nil)
 (def ^:dynamic *verbose* false)
+(def ^:dynamic *fake* false)
 
 (def ^:private
   sql (str "create table if not exists migrations ("
@@ -57,13 +63,42 @@
             nil
             steps)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Public Api
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn execute
+  "Execute a query and return a number of rows affected."
+  ([q]
+   (when (false? *fake*)
+     (sc/execute q)))
+  ([ctx q]
+   (when (false? *fake*)
+     (sc/execute q ctx))))
+
+(defn fetch
+  "Fetch eagerly results executing a query.
+
+  This function returns a vector of records (default) or
+  rows (depending on specified opts). Resources are relased
+  inmediatelly without specific explicit action for it."
+  ([q]
+   (when (false? *fake*)
+     (sc/fetch q)))
+  ([ctx q]
+   (when (false? *fake*)
+     (sc/fetch q ctx)))
+  ([ctx q opts]
+   (when (false? *fake*)
+     (sc/fetch q ctx opts))))
 
 (defn migrate
   "Main entry point for apply migrations."
-  ([dbspec migration] (migration dbspec migration {}))
-  ([dbspec migration {:keys [verbose] :or {verbose true} :as options}]
-   (bootstrap-if-neeed options)
+  ([dbspec migration] (migrate dbspec migration {}))
+  ([dbspec migration {:keys [verbose fake] :or {verbose true fake false} :as options}]
+   (bootstrap-if-needed options)
    (binding [*localdb* (localdb options)
-             *verbose* verbose]
+             *verbose* verbose
+             *fake* fake]
      (with-open [ctx (sc/context dbspec)]
        (do-migrate ctx migration options)))))
