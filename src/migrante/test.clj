@@ -1,16 +1,28 @@
-(ns migrations.test
-  (:require [migrations.core :refer [defmigration]])
-  (:require [datasource.core :as ds])
-  (:gen-class))
+(ns migrante.test)
 
-(defn -main
-  [& args]
-  (println "Environment config:" (ds/get-config)))
+(def ^:private
+  migration-0001
+  {:up (fn [ctx]
+         (println " (applying migration 0001)"))
+   :down (fn [ctx]
+           (println " (unapplying migration 0001)"))})
 
-(defmigration :name "test-1" :parent nil
-  :up (fn [dbspec] (println "up1"))
-  :down (fn [dbspec] (println "down1")))
+(def ^:private
+  migration-0002
+  {:up (fn [ctx]
+         (println " (applying migration 0002)"))
+   :down (fn [ctx]
+           (println " (unapplying migration 0002)"))})
 
-(defmigration :name "test-2" :parent "test-1"
-  :up (fn [dbspec] (println "up2"))
-  :down (fn [dbspec] (println "down2")))
+(def ^:private
+  migration-0003
+  {:up (fn [ctx]
+         (println " (applying migration 0003)"))
+   :down (fn [ctx]
+           (println " (unapplying migration 0003)"))})
+
+(def mymigrations
+  {:name :testapp
+   :steps [[:0001 migration-0001]
+           [:0002 migration-0002]
+           [:0003 migration-0003]]})
