@@ -86,7 +86,6 @@
   (run-up [step ctx]
     (let [upfn (:up step)]
       (upfn ctx)))
-
   (run-down [step ctx]
     (let [downfn (:down step)]
       (downfn ctx)))
