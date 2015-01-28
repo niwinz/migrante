@@ -2,6 +2,7 @@
   (:require [clojure.test :refer :all]
             [migrante.core :as mg]
             [suricatta.core :as sc]
+            [schema.core :as s]
             [suricatta.proto :as scproto]))
 
 (def ^{:dynamic true
@@ -154,3 +155,18 @@
     ;; This now should not raise exception because all
     ;; migration are faked and registred.
     (mg/migrate *ctx* migrations)))
+
+
+(deftest migrations-validation
+  (let [mvalidator (deref #'mg/migration-validator)
+        stepfn (fn [n] {:up (fn [ctx] nil)})
+        migration {:name :foobar
+                   :steps [[:0001 (stepfn 1)]
+                           [:0002 (stepfn 2)]]}]
+    (is (nil? (mvalidator migration))))
+  (let [mvalidator (deref #'mg/migration-validator)
+        stepfn (fn [n] (fn [ctx] nil))
+        migration {:name :foobar
+                   :steps [[:0001 (stepfn 1)]
+                           [:0002 (stepfn 2)]]}]
+    (is (nil? (mvalidator migration)))))

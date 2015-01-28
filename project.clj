@@ -7,6 +7,7 @@
                  [cuerdas "0.3.0"]
                  [com.taoensso/timbre "3.3.1"]
                  [slingshot "0.12.1"]
+                 [prismatic/schema "0.3.4"]
                  [suricatta "0.2.0"]
                  [com.h2database/h2 "1.3.176"]]
   :test-paths ["tests"]

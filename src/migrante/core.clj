@@ -1,12 +1,13 @@
 (ns migrante.core
   (:require [clojure.pprint :refer (pprint)]
+            [schema.core :as s]
             [taoensso.timbre :as timbre]
             [slingshot.slingshot :refer [throw+ try+]]
             [suricatta.core :as sc]
             [suricatta.proto :as scproto]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Private Api
+;; Private Api: Helpers
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (def ^:dynamic *verbose* false)
@@ -24,6 +25,27 @@
        " created_at timestamp,"
        " unique(module, step)"
        ");"))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Private Api: Validators
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(def ^:private
+  migration-validator
+  (s/checker {:name s/Keyword
+              :steps [[(s/one s/Keyword "stepname")
+                       (s/either (s/pred fn?)
+                                 {:up (s/pred fn?)
+                                  (s/optional-key :down) (s/pred fn?)})]]}))
+
+(defn- migration?
+  [m]
+  (nil? (migration-validator m)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Private Api: Implementation
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn migration-registred?
   "Check if concrete migration is already registred."
@@ -124,6 +146,7 @@
   "Main entry point for apply a migration."
   ([dbspec migration] (migrate dbspec migration {}))
   ([dbspec migration {:keys [verbose] :or {verbose true} :as options}]
+   {:pre [(migration? migration)]}
    (with-open [mctx (normalize-to-context dbspec)
                lctx (local-context options)]
      (sc/atomic lctx
