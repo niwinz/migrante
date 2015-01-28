@@ -56,8 +56,8 @@
     ctx))
 
 (defprotocol IMigration
-  (run-up [_ _] "Run function in migrate process.")
-  (run-down [_ _] "Run function in rollback process."))
+  (^:private run-up [_ _] "Run function in migrate process.")
+  (^:private run-down [_ _] "Run function in rollback process."))
 
 (extend-protocol IMigration
   clojure.lang.IPersistentMap
