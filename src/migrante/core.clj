@@ -9,7 +9,6 @@
 ;; Private Api
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(def ^:dynamic *localdb* nil)
 (def ^:dynamic *verbose* false)
 
 (defmacro log
@@ -18,47 +17,43 @@
      (timbre/info ~@args)))
 
 (def ^:private
-  sql (str "create table if not exists migrations ("
-           " module varchar(255),"
-           " step varchar(255),"
-           " created_at timestamp,"
-           " unique(module, step)"
-           ");"))
+  bootstrap-sql
+  (str "create table if not exists migrations ("
+       " module varchar(255),"
+       " step varchar(255),"
+       " created_at timestamp,"
+       " unique(module, step)"
+       ");"))
 
-(defn- localdb
-  "Get a suricatta opened context to the local state database."
-  [{:keys [localdb] :or {localdb "_migrations.h2"}}]
-  (let [dbspec {:subprotocol "h2" :subname localdb}]
-    (sc/context dbspec)))
-
-(defn- migration-registred?
+(defn migration-registred?
   "Check if concrete migration is already registred."
-  [module step]
-  {:pre [(keyword? module) (keyword? step)]}
-  (let [sql (str "select * from migrations"
-                 " where module=? and step=?")
-        res (sc/fetch *localdb* [sql (name module) (name step)])]
-    (pos? (count res))))
+  ([ctx module step]
+   {:pre [(keyword? module) (keyword? step)]}
+   (let [sql (str "select * from migrations"
+                  " where module=? and step=?")
+         res (sc/fetch ctx [sql (name module) (name step)])]
+     (pos? (count res)))))
 
 (defn- register-migration!
   "Register a concrete migration into local migrations database."
-  [module step]
-  {:pre [(keyword? module) (keyword? step)]}
-  (let [sql "insert into migrations (module, step) values (?, ?)"]
-    (sc/execute *localdb* [sql (name module) (name step)])))
+  ([ctx module step]
+   {:pre [(keyword? module) (keyword? step)]}
+   (let [sql "insert into migrations (module, step) values (?, ?)"]
+     (sc/execute ctx [sql (name module) (name step)]))))
 
 (defn- unregister-migration!
   "Unregister a concrete migration from local migrations database."
-  [module step]
-  {:pre [(keyword? module) (keyword? step)]}
-  (let [sql "delete from migrations where module=? and step=?;"]
-    (sc/execute *localdb* [sql (name module) (name step)])))
+  ([ctx module step]
+   {:pre [(keyword? module) (keyword? step)]}
+   (let [sql "delete from migrations where module=? and step=?;"]
+     (sc/execute ctx [sql (name module) (name step)]))))
 
-(defn- bootstrap-if-needed
-  "Bootstrap the initial database for store migrations."
-  [options]
-  (with-open [ctx (localdb options)]
-    (sc/execute ctx sql)))
+(defn local-context
+  [{:keys [localdb] :or {localdb "_migrations.h2"}}]
+  (let [dbspec {:subprotocol "h2" :subname localdb}
+        ctx    (sc/context dbspec)]
+    (sc/execute ctx bootstrap-sql)
+    ctx))
 
 (defprotocol IMigration
   (run-up [_ _] "Run function in migrate process.")
@@ -81,22 +76,27 @@
     nil))
 
 (defn- do-migrate
-  [ctx migrations {:keys [until fake] :or {fake false}}]
-  (let [migrationsid (:name migrations)
-        migrationsname (name migrationsid)
-        steps (:steps migrations)]
-    (sc/atomic ctx
-      (reduce (fn [_ [stepid stepdata]]
-                (when-not (migration-registred? migrationsid stepid)
-                  (log (format "- Applying migration %s/%s." migrationsid stepid))
-                  (sc/atomic ctx
+  [mctx lctx migration {:keys [until fake] :or {fake false}}]
+  (let [mid (:name migration)
+        steps (:steps migration)]
+    (sc/atomic mctx
+      (reduce (fn [_ [sid sdata]]
+                (when-not (migration-registred? lctx mid sid)
+                  (log (format "- Applying migration %s/%s." mid sid))
+                  (sc/atomic mctx
                     (when (not fake)
-                      (run-up stepdata ctx))
-                    (register-migration! migrationsid stepid)))
-                (when (= until stepid)
+                      (run-up sdata mctx))
+                    (register-migration! lctx mid sid)))
+                (when (= until sid)
                   (reduced nil)))
               nil
               steps))))
+
+(defn- normalize-to-context
+  [dbspec]
+  (if (satisfies? scproto/IContext dbspec)
+    dbspec
+    (sc/context dbspec)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Public Api
@@ -121,16 +121,11 @@
    (sc/fetch ctx q opts)))
 
 (defn migrate
-  "Main entry point for apply migrations."
+  "Main entry point for apply a migration."
   ([dbspec migration] (migrate dbspec migration {}))
-  ([dbspec migration {:keys [verbose fake] :or {verbose true} :as options}]
-   (bootstrap-if-needed options)
-   (let [context (if (satisfies? scproto/IContext dbspec)
-                   dbspec
-                   (sc/context dbspec))]
-     (with-open [ctx context
-                 lctx (localdb options)]
-       (sc/atomic-apply lctx (fn [lctx]
-                               (binding [*localdb* lctx
-                                         *verbose* verbose]
-                                 (do-migrate ctx migration options))))))))
+  ([dbspec migration {:keys [verbose] :or {verbose true} :as options}]
+   (with-open [mctx (normalize-to-context dbspec)
+               lctx (local-context options)]
+     (sc/atomic lctx
+       (binding [*verbose* verbose]
+         (do-migrate mctx lctx migration options))))))
