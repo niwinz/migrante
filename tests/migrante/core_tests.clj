@@ -58,7 +58,9 @@
   (with-open [ctx (sc/context dbspec)]
     (sc/atomic ctx
       (let [ctx (wrap-ctx ctx)]
-        (with-redefs [mg/localdb (fn [_] ctx)]
+        (with-redefs [mg/local-context (fn [_]
+                                         (sc/execute ctx (deref #'mg/bootstrap-sql))
+                                         ctx)]
           (binding [*ctx* ctx]
             (end)
             (sc/set-rollback! *ctx*)))))))
