@@ -12,5 +12,9 @@
   :test-paths ["tests"]
   :profiles {:dev {:dependencies [[postgresql "9.3-1102.jdbc41"]
                                   [com.h2database/h2 "1.3.176"]]
-                   :main ^:skip-aot migrations.test}}
+                   :main ^:skip-aot migrations.test}
+
+             :migrante {:dbspec {:subprotocol "h2"
+                                 :subname "_experimets.db"}
+                        :migrations [migrante.test:mymigrations]}}
   :eval-in-leiningen true)
