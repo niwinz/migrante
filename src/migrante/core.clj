@@ -78,6 +78,8 @@
     ctx))
 
 (defprotocol IMigration
+  "Define a migration step behavior on up and down
+  migration actons."
   (^:private run-up [_ _] "Run function in migrate process.")
   (^:private run-down [_ _] "Run function in rollback process."))
 
