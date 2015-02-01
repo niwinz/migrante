@@ -76,6 +76,8 @@
      (sc/execute ctx [sql (name module) (name step)]))))
 
 (defn local-context
+  "Return a local context (used for stroe the migrations
+  state of the application."
   [{:keys [localdb] :or {localdb "_migrations.h2"}}]
   (let [dbspec {:subprotocol "h2" :subname localdb}
         ctx    (sc/context dbspec)]
