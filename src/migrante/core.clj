@@ -89,7 +89,7 @@
     (let [upfn (:up step)]
       (upfn ctx)))
   (run-down [step ctx]
-    (let [downfn (:down step)]
+    (if-let [downfn (:down step)]
       (downfn ctx)))
 
   clojure.lang.IFn
