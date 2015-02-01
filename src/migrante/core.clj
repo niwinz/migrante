@@ -43,6 +43,8 @@
                                   (s/optional-key :down) (s/pred fn?)})]]}))
 
 (defn- migration?
+  "Check if a given parameter is a valid
+  migration data structure or not."
   [m]
   (nil? (migration-validator m)))
 
