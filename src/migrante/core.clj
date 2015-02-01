@@ -13,6 +13,8 @@
 (def ^:dynamic *verbose* false)
 
 (defmacro log
+  "A simple sugar syntax helper for log information
+  into the standard output."
   [& args]
   `(when *verbose*
      (timbre/info ~@args)))
