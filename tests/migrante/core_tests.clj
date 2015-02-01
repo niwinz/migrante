@@ -121,9 +121,12 @@
 (deftest migrations-with-until-limitation
   (let [result (atom 0)
         step (fn [n]
-               (fn [ctx]
-                 (swap! result inc)
-                 (sc/execute ctx ["insert into foo (id) values (?)" n])))
+               {:up (fn [ctx]
+                      (swap! result inc)
+                      (sc/execute ctx ["insert into foo (id) values (?)" n]))
+                :down (fn [ctx]
+                        (swap! result inc)
+                        (sc/execute ctx ["delete from foo where id = ?" n]))})
         migrations {:name :foobar
                     :steps [[:0001 (step 1)]
                             [:0002 (step 2)]
@@ -138,7 +141,18 @@
     ;; Test if only two migrations are correctly
     ;; persisted in a database.
     (let [res (mg/fetch *ctx* "select * from foo;")]
-      (is (= 2 (count res))))))
+      (is (= 2 (count res))))
+
+
+    (mg/rollback *ctx* migrations {:until :0002})
+
+    ;; Test if only two migrations are correctly
+    ;; removed
+    (let [res (mg/fetch *ctx* "select * from foo;")]
+      (is (= 1 (count res))))
+
+    (is (not (mg/migration-registred? *ctx* :foobar :0002)))
+    (is (mg/migration-registred? *ctx* :foobar :0001))))
 
 (deftest migrations-with-fake-parameter
   (let [result (atom 0)
