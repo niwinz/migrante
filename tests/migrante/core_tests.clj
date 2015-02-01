@@ -89,8 +89,13 @@
                     :steps [[:0001 step]
                             [:0002 step]]}]
     (mg/migrate *ctx* migrations)
-    (is (= @result 2))))
+    (is (= @result 2))
+    (is (mg/migration-registred? *ctx* :foobar :0002))
+    (is (mg/migration-registred? *ctx* :foobar :0001))
 
+    (mg/rollback *ctx* migrations)
+    (is (not (mg/migration-registred? *ctx* :foobar :0002)))
+    (is (not (mg/migration-registred? *ctx* :foobar :0001)))))
 
 (deftest migrations-with-exceptions
   (let [result (atom 0)
