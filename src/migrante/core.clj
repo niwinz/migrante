@@ -19,7 +19,8 @@
   `(when *verbose*
      (timbre/info ~@args)))
 
-(def ^:private
+(def ^{:private true
+       :doc "Local migration storage table sql declaration."}
   bootstrap-sql
   (str "create table if not exists migrations ("
        " module varchar(255),"
