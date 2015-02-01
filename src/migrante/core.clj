@@ -113,6 +113,23 @@
               nil
               steps))))
 
+(defn- do-rollback
+  [mctx lctx migration {:keys [until fake] :or {fake false}}]
+  (let [mid (:name migration)
+        steps (reverse (:steps migration))]
+    (sc/atomic mctx
+      (reduce (fn [_ [sid sdata]]
+                (when (migration-registred? lctx mid sid)
+                  (log (format "- Rollback migration %s/%s." mid sid))
+                  (sc/atomic mctx
+                    (when (not fake)
+                      (run-down sdata mctx))
+                    (unregister-migration! lctx mid sid)))
+                (when (= until sid)
+                  (reduced nil)))
+              nil
+              steps))))
+
 (defn- normalize-to-context
   [dbspec]
   (if (satisfies? scproto/IContext dbspec)
@@ -151,3 +168,14 @@
      (sc/atomic lctx
        (binding [*verbose* verbose]
          (do-migrate mctx lctx migration options))))))
+
+(defn rollback
+  "Main entry point for rollback migrations."
+  ([dbspec migration] (rollback dbspec migration {}))
+  ([dbspec migration {:keys [verbose] :or {verbose true} :as options}]
+   {:pre [(migration? migration)]}
+   (with-open [mctx (normalize-to-context dbspec)
+               lctx (local-context options)]
+     (sc/atomic lctx
+       (binding [*verbose* verbose]
+         (do-rollback mctx lctx migration options))))))
