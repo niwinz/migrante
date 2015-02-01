@@ -26,12 +26,12 @@
        " unique(module, step)"
        ");"))
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Private Api: Validators
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(def ^:private
+(def ^{:private true
+       :doc "A schema representaion of the migration module data structure."}
   migration-validator
   (s/checker {:name s/Keyword
               :steps [[(s/one s/Keyword "stepname")
