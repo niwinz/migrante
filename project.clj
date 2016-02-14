@@ -1,4 +1,4 @@
-(defproject migrante "0.1.0-SNAPSHOT"
+(defproject niwinz/migrante "0.1.0-SNAPSHOT"
   :description "Flexible database migration library for Clojure."
   :url "https://github.com/niwibe/migrante"
   :license {:name "BSD (2-Clause)"
