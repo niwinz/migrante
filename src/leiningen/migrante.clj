@@ -2,8 +2,8 @@
   "Flexible migrations library for Clojure."
   (:refer-clojure :exclude [list])
   (:require [cuerdas.core :as str]
-            [clojure.pprint :refer (pprint)]
-            [migrante.core :as mg]))
+            [migrante.core :as mg]
+            [clojure.edn :as edn]))
 
 (defn- load-migrations
   [migrations]
@@ -36,14 +36,17 @@
   ([project name]
    (migrate project name nil))
   ([project name until]
-   (let [name (keyword name)
+   (let [name (edn/read-string name)
+         until (edn/read-string until)
          profile (:migrante (:profiles project))
-         migrations (load-migrations (:migrations profile []))
          dbspec (:dbspec profile)
+         options (:options profile)
+         migrations (load-migrations (:migrations profile []))
          migration (get migrations name)]
      (if (nil? migration)
        (println "Migration not found.")
-       (mg/migrate dbspec migration)))))
+       (with-open [mctx (mg/context dbspec options)]
+         (mg/migrate mctx migration {:until until}))))))
 
 (defn- list
   "Show all registred migration modules and all migration
@@ -58,15 +61,16 @@
   state (applied or not) of selected migration module."
   [project]
   (let [profile (:migrante (:profiles project))
+        dbspec (:dbspec profile)
         options (:options profile)
         migrations (load-migrations (:migrations profile []))]
-    (with-open [lctx (mg/local-context options)]
-      (println "Registred modules:")
+    (with-open [mctx (mg/context dbspec options)]
+      (println "Registred migration modules:")
       (doseq [[mid migration] migrations]
         (let [description (or (:desc migration) "(without description)")]
           (println (format "* %s %s" mid description))
           (doseq [[sid _] (:steps migration)]
-            (if (mg/migration-registred? lctx mid sid)
+            (if (mg/registered? mctx mid sid)
               (println (format " - [x] %s" sid))
               (println (format " - [ ] %s" sid)))))))))
 
@@ -77,8 +81,8 @@
    (let [command (keyword command)]
      (condp = (keyword command)
        :help (println "Help")
-
-       (let [message (format "Command %s not found (try lein migrante help)." command)]
+       (let [message (format "Command %s not found (try lein migrante help)."
+                             command)]
          (println message))))))
 
 (defn ^{:subtasks [#'migrate #'help #'list]}

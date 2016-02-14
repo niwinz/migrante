@@ -145,7 +145,11 @@
   ([conn {:keys [verbose] :or {verbose true}}]
    (let [conn (normalize-to-connection conn)]
      (setup! conn)
-     (reify IMigrationContext
+     (reify
+       java.lang.AutoCloseable
+       (close [_] (.close conn))
+
+       IMigrationContext
        (-migrate [_ migration options]
          (sc/atomic conn
            (binding [*verbose* verbose]
