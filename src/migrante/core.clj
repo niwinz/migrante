@@ -1,7 +1,8 @@
 (ns migrante.core
   (:require [suricatta.core :as sc]
             [suricatta.proto :as sp]
-            [cuerdas.core :as str]))
+            [cuerdas.core :as str]
+            [clojure.java.io :as io]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Private Api: Helpers
@@ -204,4 +205,14 @@
     `(def ~sym
        ~docs
        (->Migration ~mname ~docs
-                    (fn [] ~up) (fn [] ~down)))))
+                    (or ~up identity)
+                    (or ~down identity)))))
+
+(defmacro resource
+  "Helper for setup migration functions
+  just using a simple path to sql file
+  located in the class path."
+  [path]
+  `(fn []
+     (let [sql# (slurp (io/resource ~path))]
+       (execute sql#))))
