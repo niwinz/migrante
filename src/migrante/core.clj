@@ -7,8 +7,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (def ^:dynamic *verbose* false)
+(def ^:dynamic *ctx* nil)
 
-(defmacro log
+(defmacro ^:private log
   "A simple sugar syntax helper for log information
   into the standard output."
   [& args]
@@ -83,9 +84,10 @@
               (when-not (migration-registered? conn mid sid)
                 (log (format "- Applying migration %s/%s" mid sid))
                 (sc/atomic conn
-                  (when (not fake)
-                    (-run-up sdata conn))
-                  (register-migration! conn mid sid)))
+                  (binding [*ctx* conn]
+                    (when (not fake)
+                      (-run-up sdata conn))
+                    (register-migration! conn mid sid))))
               (when (= until sid)
                 (reduced nil)))
             steps))))
@@ -99,9 +101,10 @@
               (when (migration-registered? conn mid sid)
                 (log (format "- Rollback migration %s/%s" mid sid))
                 (sc/atomic conn
-                  (when (not fake)
-                    (-run-down sdata conn))
-                  (unregister-migration! conn mid sid)))
+                  (binding [*ctx* conn]
+                    (when (not fake)
+                      (-run-down sdata conn))
+                    (unregister-migration! conn mid sid))))
               (when (= until sid)
                 (reduced nil)))
             steps))))
@@ -118,10 +121,8 @@
 
 (defn execute
   "Execute a query and return a number of rows affected."
-  ([q]
-   (sc/execute q))
-  ([ctx q]
-   (sc/execute ctx q)))
+  [q]
+  (sc/execute *ctx* q))
 
 (defn fetch
   "Fetch eagerly results executing a query.
@@ -129,10 +130,10 @@
   This function returns a vector of records (default) or
   rows (depending on specified opts). Resources are relased
   inmediatelly without specific explicit action for it."
-  ([ctx q]
-   (sc/fetch ctx q))
-  ([ctx q opts]
-   (sc/fetch ctx q opts)))
+  ([q]
+   (sc/fetch *ctx* q))
+  ([q opts]
+   (sc/fetch *ctx* q opts)))
 
 (defprotocol IMigrationContext
   (-migrate [_ migration options])
@@ -154,6 +155,7 @@
          (sc/atomic conn
            (binding [*verbose* verbose]
              (do-migrate conn migration options))))
+
        (-rollback [_ migration options]
          (sc/atomic conn
            (binding [*verbose* verbose]
@@ -178,3 +180,18 @@
 (defn registered?
   [mctx module step]
   (-registered? mctx module step))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Sugar Syntax
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defmacro defmigration
+  [name & [docs & args]]
+  (let [{:keys [up down]} (if (string? docs)
+                            (apply hash-map args)
+                            (apply hash-map docs args))
+        docs (if (string? docs) docs "")]
+    `(def ~name
+       ~docs
+       {:up (fn [] ~up)
+        :down (fn [] ~down)})))
