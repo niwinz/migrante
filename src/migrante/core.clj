@@ -1,6 +1,7 @@
 (ns migrante.core
   (:require [suricatta.core :as sc]
-            [suricatta.proto :as sp]))
+            [suricatta.proto :as sp]
+            [cuerdas.core :as str]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Private Api: Helpers
@@ -57,40 +58,47 @@
 (defprotocol IMigration
   "Define a migration step behavior on up and down
   migration actons."
+  (-name [_] "Return the migration name")
+  (-desc [_] "Return the migration desc")
   (-run-up [_ _] "Run function in migrate process.")
   (-run-down [_ _] "Run function in rollback process."))
 
-(extend-protocol IMigration
-  clojure.lang.IPersistentMap
-  (-run-up [step conn]
-    (let [upfn (:up step)]
-      (upfn conn)))
-  (-run-down [step conn]
-    (if-let [downfn (:down step)]
-      (downfn conn)))
+(deftype Migration [name desc up down])
 
-  clojure.lang.IFn
+(extend-protocol IMigration
+  Migration
   (-run-up [step conn]
-    (step conn))
+    (let [upfn (.-up step)]
+      (binding [*ctx* conn]
+        (upfn))))
   (-run-down [step conn]
-    nil))
+    (if-let [downfn (.-down step)]
+      (binding [*ctx* conn]
+        (downfn))))
+  (-name [step]
+    (str/collapse-whitespace
+     (.-name step)))
+  (-desc [step]
+    (str/collapse-whitespace
+     (.-desc step))))
 
 (defn- do-migrate
   [conn migration {:keys [until fake] :or {fake false}}]
   (let [mid (:name migration)
         steps (:steps migration)]
+    (log (str/format "\nApplying migrations for `%s`:" mid))
     (sc/atomic conn
       (run! (fn [[sid sdata]]
               (when-not (migration-registered? conn mid sid)
-                (log (format "- Applying migration %s/%s" mid sid))
+                (log (format "- %s - %s - %s" sid (-name sdata) (-desc sdata)))
                 (sc/atomic conn
-                  (binding [*ctx* conn]
-                    (when (not fake)
-                      (-run-up sdata conn))
-                    (register-migration! conn mid sid))))
+                  (when (not fake)
+                    (-run-up sdata conn))
+                  (register-migration! conn mid sid)))
               (when (= until sid)
                 (reduced nil)))
-            steps))))
+            steps))
+    (log "\n")))
 
 (defn- do-rollback
   [conn migration {:keys [until fake] :or {fake false}}]
@@ -99,12 +107,12 @@
     (sc/atomic conn
       (run! (fn [[sid sdata]]
               (when (migration-registered? conn mid sid)
-                (log (format "- Rollback migration %s/%s" mid sid))
+                (log (format "- Rollback migration %s/%s (%s - %s)"
+                             mid sid (-name sdata) (-desc sdata)))
                 (sc/atomic conn
-                  (binding [*ctx* conn]
-                    (when (not fake)
-                      (-run-down sdata conn))
-                    (unregister-migration! conn mid sid))))
+                  (when (not fake)
+                    (-run-down sdata conn))
+                  (unregister-migration! conn mid sid)))
               (when (= until sid)
                 (reduced nil)))
             steps))))
@@ -186,12 +194,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defmacro defmigration
-  [name & [docs & args]]
+  [sym & [docs & args]]
   (let [{:keys [up down]} (if (string? docs)
                             (apply hash-map args)
                             (apply hash-map docs args))
-        docs (if (string? docs) docs "")]
-    `(def ~name
+        docs (if (string? docs) docs "")
+        mname (name sym)]
+    `(def ~sym
        ~docs
-       {:up (fn [] ~up)
-        :down (fn [] ~down)})))
+       (->Migration ~mname ~docs
+                    (fn [] ~up) (fn [] ~down)))))
