@@ -86,11 +86,12 @@
   [conn migration {:keys [until fake] :or {fake false}}]
   (let [mid (:name migration)
         steps (:steps migration)]
-    (log (str/format "\nApplying migrations for `%s`:" mid))
+    (log (str/format "Applying migrations for `%s`:" mid))
     (sc/atomic conn
       (run! (fn [[sid sdata]]
               (when-not (migration-registered? conn mid sid)
-                (log (format "- %s - %s - %s" sid (-name sdata) (-desc sdata)))
+                (log (format "- %s - %s - %s" sid (-name sdata)
+                             (str/prune (-desc sdata) 70)))
                 (sc/atomic conn
                   (when (not fake)
                     (-run-up sdata conn))
