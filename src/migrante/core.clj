@@ -49,9 +49,9 @@
   "Initialize the database if it is not initialized."
   [conn]
   (let [sql (str "create table if not exists migrations ("
-                 " module varchar(255),"
-                 " step varchar(255),"
-                 " created_at timestamp,"
+                 " module text,"
+                 " step text,"
+                 " created_at timestamp DEFAULT current_timestamp,"
                  " unique(module, step)"
                  ");")]
     (sc/execute conn sql)))
